@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>熙熙狗的小屋</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="stage" aria-label="熙熙狗游戏舞台">
+        <canvas id="game" width="1280" height="760"></canvas>
+        <div class="topbar">
+          <div>
+            <p>XiXi Pet</p>
+            <h1>熙熙狗</h1>
+          </div>
+          <div class="stats" aria-label="熙熙狗状态">
+            <span><b id="happyValue">92</b>开心</span>
+            <span><b id="energyValue">84</b>活力</span>
+            <span><b id="bondValue">96</b>亲密</span>
+          </div>
+        </div>
+        <div id="speech" class="speech">熙熙狗在小屋里等你</div>
+      </section>
+
+      <aside class="panel" aria-label="控制面板">
+        <div class="profile">
+          <img src="./assets/xixi-idle.png" alt="熙熙狗参考形象" />
+          <div>
+            <p>当前主角</p>
+            <h2>熙熙狗</h2>
+            <span>金棕长毛、白色脸线、黑米色小背带。</span>
+          </div>
+        </div>
+
+        <div class="actions" aria-label="互动">
+          <button id="treatBtn" type="button">喂小饼干</button>
+          <button id="ballBtn" type="button">丢球</button>
+          <button id="waveBtn" type="button">打招呼</button>
+          <button id="restBtn" type="button">休息</button>
+        </div>
+
+        <div class="scene-tabs" aria-label="场景切换">
+          <button class="active" type="button" data-scene="room">小屋</button>
+          <button type="button" data-scene="garden">花园</button>
+          <button type="button" data-scene="night">夜晚</button>
+        </div>
+
+        <div class="asset-note">
+          <strong>形象来源</strong>
+          <span>使用已有熙熙狗 spritesheet 渲染，不再用 Canvas 粗略手绘。</span>
+        </div>
+      </aside>
+    </main>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
