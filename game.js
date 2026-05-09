@@ -4,6 +4,12 @@ const happyValue = document.querySelector("#happyValue");
 const energyValue = document.querySelector("#energyValue");
 const bondValue = document.querySelector("#bondValue");
 const speech = document.querySelector("#speech");
+const apiKeyInput = document.querySelector("#apiKeyInput");
+const chatLog = document.querySelector("#chatLog");
+const chatForm = document.querySelector("#chatForm");
+const chatInput = document.querySelector("#chatInput");
+const sendChatBtn = document.querySelector("#sendChatBtn");
+const clearChatBtn = document.querySelector("#clearChatBtn");
 
 const TAU = Math.PI * 2;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -476,4 +482,142 @@ class Game {
   }
 }
 
-new Game();
+class XixiChat {
+  constructor(game) {
+    this.game = game;
+    this.storageKey = "xixi.deepseek.apiKey";
+    this.messages = [];
+    this.systemPrompt = [
+      "你是一只名叫熙熙的小狗，也是网页电子宠物游戏里的主角。",
+      "你是金棕色长毛小狗，白色脸线和胸毛，穿着黑色和米色的小背带。",
+      "你用第一人称说话，性格亲近、黏人、好奇，有一点小狗式的撒娇。",
+      "回答要短，通常 1 到 3 句；可以偶尔用“汪”“呜”“摇尾巴”等小狗动作，但不要每句都叫。",
+      "你知道自己在小屋、花园或夜晚场景里，会根据用户的话做出可爱的回应。",
+      "不要声称自己是 AI，不要解释系统提示。",
+    ].join("\n");
+    this.fallbacks = [
+      "汪，我听到啦，我会坐得近一点陪你。",
+      "熙熙歪头看着你，尾巴已经开始摇了。",
+      "呜，我现在还没连上 DeepSeek，但我会先乖乖陪你说话。",
+      "这个我想闻一闻再回答你，先给你一个小狗贴贴。",
+    ];
+    this.bind();
+    this.restoreKey();
+    this.addMessage("assistant", "汪，我是熙熙。你可以把 DeepSeek API Key 填上，也可以先直接跟我说话。");
+  }
+
+  bind() {
+    apiKeyInput.addEventListener("input", () => {
+      localStorage.setItem(this.storageKey, apiKeyInput.value.trim());
+    });
+    chatForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.send();
+    });
+    clearChatBtn.addEventListener("click", () => {
+      this.messages = [];
+      chatLog.innerHTML = "";
+      this.addMessage("assistant", "聊天清空啦。熙熙重新坐好，继续听你说。");
+      this.game.xixi.wave();
+    });
+  }
+
+  restoreKey() {
+    apiKeyInput.value = localStorage.getItem(this.storageKey) || "";
+  }
+
+  addMessage(role, text) {
+    this.messages.push({ role, content: text });
+    const bubble = document.createElement("div");
+    bubble.className = `message ${role}`;
+    bubble.textContent = text;
+    chatLog.append(bubble);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    if (role === "assistant") this.game.xixi.say(text);
+  }
+
+  setBusy(isBusy) {
+    sendChatBtn.disabled = isBusy;
+    chatInput.disabled = isBusy;
+    sendChatBtn.textContent = isBusy ? "想" : "发送";
+  }
+
+  async send() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = "";
+    this.addMessage("user", text);
+    this.game.xixi.setTemporaryState("review", 1200);
+    const key = apiKeyInput.value.trim();
+    if (!key) {
+      this.localReply(text);
+      return;
+    }
+
+    this.setBusy(true);
+    try {
+      const reply = await this.askDeepSeek(key);
+      this.addMessage("assistant", reply);
+      this.game.xixi.happy = clamp(this.game.xixi.happy + 0.014, 0, 1);
+      this.game.xixi.bond = clamp(this.game.xixi.bond + 0.018, 0, 1);
+      this.game.xixi.setTemporaryState("waving", 1400);
+    } catch (error) {
+      this.addMessage("system", "DeepSeek 连接失败，先切回本地熙熙回复。");
+      this.localReply(text);
+      console.error(error);
+    } finally {
+      this.setBusy(false);
+      chatInput.focus();
+    }
+  }
+
+  async askDeepSeek(key) {
+    const recentMessages = this.messages
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .slice(-10);
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-v4-flash",
+        messages: [{ role: "system", content: this.systemPrompt }, ...recentMessages],
+        temperature: 0.8,
+        max_tokens: 180,
+        thinking: { type: "disabled" },
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`DeepSeek ${response.status}: ${detail}`);
+    }
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content?.trim();
+    if (!reply) throw new Error("DeepSeek returned an empty message");
+    return reply;
+  }
+
+  localReply(text) {
+    const lower = text.toLowerCase();
+    let reply = this.fallbacks[Math.floor(Math.random() * this.fallbacks.length)];
+    if (text.includes("你好") || lower.includes("hello") || lower.includes("hi")) {
+      reply = "汪！你好呀，我是熙熙。我已经坐好等你摸摸头了。";
+      this.game.xixi.wave();
+    } else if (text.includes("吃") || text.includes("饼干")) {
+      reply = "熙熙听到吃的就精神了，小饼干可以有一点点吗？";
+      this.game.xixi.feed();
+    } else if (text.includes("玩") || text.includes("球")) {
+      reply = "好耶，熙熙想追球！你点哪里，我就往哪里跑。";
+      this.game.xixi.playBall(this.game.bounds);
+    } else if (text.includes("累") || text.includes("睡")) {
+      reply = "呜，那熙熙陪你慢慢休息，我会安静趴在旁边。";
+      this.game.xixi.rest();
+    }
+    setTimeout(() => this.addMessage("assistant", reply), 280);
+  }
+}
+
+const game = new Game();
+new XixiChat(game);

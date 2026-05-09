@@ -47,9 +47,28 @@
           <button type="button" data-scene="night">夜晚</button>
         </div>
 
+        <section class="chat" aria-label="和熙熙聊天">
+          <div class="chat-head">
+            <div>
+              <p>DeepSeek Chat</p>
+              <h3>和熙熙说话</h3>
+            </div>
+            <button id="clearChatBtn" type="button" aria-label="清空聊天">清空</button>
+          </div>
+          <label class="api-key">
+            <span>API Key</span>
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+          <div id="chatLog" class="chat-log" aria-live="polite"></div>
+          <form id="chatForm" class="chat-form">
+            <input id="chatInput" type="text" autocomplete="off" placeholder="跟熙熙说句话" />
+            <button id="sendChatBtn" type="submit">发送</button>
+          </form>
+        </section>
+
         <div class="asset-note">
           <strong>形象来源</strong>
-          <span>使用已有熙熙狗 spritesheet 渲染，不再用 Canvas 粗略手绘。</span>
+          <span>聊天不会把 Key 写进仓库，只保存在当前浏览器。</span>
         </div>
       </aside>
     </main>
