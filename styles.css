@@ -411,6 +411,10 @@ input:focus {
   line-height: 1.4;
 }
 
+.asset-note {
+  display: none !important;
+}
+
 @media (max-width: 900px) {
   body {
     overflow: auto;
