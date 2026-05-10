@@ -22,6 +22,7 @@ class Scene {
     this.name = "room";
     this.width = canvas.width;
     this.height = canvas.height;
+    this.bed = { x: 960, y: 540, width: 210, height: 96 };
     this.stars = Array.from({ length: 46 }, () => ({ x: Math.random(), y: Math.random(), r: rand(1, 2.8) }));
   }
 
@@ -32,12 +33,19 @@ class Scene {
   resize(width, height) {
     this.width = width;
     this.height = height;
+    this.bed = {
+      x: width * 0.78,
+      y: height * 0.68,
+      width: clamp(width * 0.2, 170, 260),
+      height: clamp(height * 0.12, 74, 116),
+    };
   }
 
   draw(time) {
     if (this.name === "garden") this.garden(time);
     else if (this.name === "night") this.night(time);
     else this.room(time);
+    this.dogBed(time);
     this.floorAir(time);
   }
 
@@ -234,6 +242,41 @@ class Scene {
     ctx.roundRect(x - 28, y - 25, 56, 54, 14);
     ctx.fill();
   }
+
+  dogBed(time) {
+    const { x, y, width, height } = this.bed;
+    const cushion = this.name === "night" ? "#5d7280" : "#f4c36b";
+    const rim = this.name === "night" ? "#3e5665" : "#c97455";
+    const blanket = this.name === "garden" ? "#e7efc3" : "#fff1cc";
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#17211d";
+    ctx.beginPath();
+    ctx.ellipse(0, height * 0.32, width * 0.52, height * 0.18, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = rim;
+    ctx.beginPath();
+    ctx.roundRect(-width / 2, -height / 2, width, height, 26);
+    ctx.fill();
+    ctx.fillStyle = cushion;
+    ctx.beginPath();
+    ctx.roundRect(-width * 0.42, -height * 0.31, width * 0.84, height * 0.62, 22);
+    ctx.fill();
+    ctx.fillStyle = blanket;
+    ctx.beginPath();
+    ctx.ellipse(-width * 0.14, 0, width * 0.22, height * 0.2, Math.sin(time * 0.001) * 0.02, 0, TAU);
+    ctx.ellipse(width * 0.18, height * 0.02, width * 0.18, height * 0.17, 0.12, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(92, 62, 46, 0.16)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, width * 0.4, 0.1, Math.PI - 0.1);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 class XixiDog {
@@ -249,6 +292,8 @@ class XixiDog {
     this.state = "idle";
     this.direction = "right";
     this.stateUntil = 0;
+    this.goingToSleep = false;
+    this.isSleeping = false;
     this.happy = 0.92;
     this.energy = 0.84;
     this.bond = 0.96;
@@ -260,6 +305,8 @@ class XixiDog {
       waving: { row: 3, frames: 4, fps: 5.2 },
       jumping: { row: 4, frames: 5, fps: 7 },
       failed: { row: 5, frames: 8, fps: 4.5 },
+      lying: { row: 5, frameStart: 2, frames: 3, fps: 1.8 },
+      sleeping: { row: 5, frameStart: 3, frames: 2, fps: 0.9 },
       waiting: { row: 6, frames: 6, fps: 3.1 },
       running: { row: 7, frames: 6, fps: 5.5 },
       review: { row: 8, frames: 6, fps: 3.3 },
@@ -275,7 +322,14 @@ class XixiDog {
     this.stateUntil = performance.now() + ms;
   }
 
+  wake() {
+    this.goingToSleep = false;
+    this.isSleeping = false;
+    if (this.state === "sleeping" || this.state === "lying") this.state = "idle";
+  }
+
   feed() {
+    this.wake();
     this.happy = clamp(this.happy + 0.045, 0, 1);
     this.energy = clamp(this.energy + 0.025, 0, 1);
     this.bond = clamp(this.bond + 0.018, 0, 1);
@@ -285,6 +339,7 @@ class XixiDog {
   }
 
   playBall(bounds) {
+    this.wake();
     this.energy = clamp(this.energy - 0.035, 0, 1);
     this.happy = clamp(this.happy + 0.035, 0, 1);
     this.targetX = rand(bounds.left, bounds.right);
@@ -294,6 +349,7 @@ class XixiDog {
   }
 
   wave() {
+    this.wake();
     this.bond = clamp(this.bond + 0.024, 0, 1);
     this.happy = clamp(this.happy + 0.018, 0, 1);
     this.setTemporaryState("waving", 1800);
@@ -301,12 +357,29 @@ class XixiDog {
   }
 
   rest() {
+    this.wake();
     this.energy = clamp(this.energy + 0.055, 0, 1);
-    this.setTemporaryState("waiting", 2300);
-    this.say("熙熙狗坐下来歇一会儿");
+    this.setTemporaryState("lying", 3200);
+    this.say("熙熙狗趴下来歇一会儿");
+  }
+
+  sleepAt(bed) {
+    this.goingToSleep = true;
+    this.isSleeping = false;
+    this.stateUntil = 0;
+    this.targetX = bed.x;
+    this.targetY = bed.y + bed.height * 0.02;
+    this.say("熙熙狗要回狗窝睡觉啦");
   }
 
   update(bounds) {
+    if (this.isSleeping) {
+      this.energy = clamp(this.energy + 0.00018, 0.58, 1);
+      this.happy = clamp(this.happy + 0.00004, 0.66, 1);
+      this.state = "sleeping";
+      return;
+    }
+
     this.happy = clamp(this.happy - 0.00002, 0.66, 1);
     this.energy = clamp(this.energy - 0.00004, 0.58, 1);
     if (this.stateUntil && performance.now() > this.stateUntil) {
@@ -317,6 +390,15 @@ class XixiDog {
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;
     const distance = Math.hypot(dx, dy);
+    if (this.goingToSleep && distance < 12) {
+      this.goingToSleep = false;
+      this.isSleeping = true;
+      this.energy = clamp(this.energy + 0.04, 0, 1);
+      this.state = "sleeping";
+      this.say("熙熙狗在狗窝里睡着了");
+      return;
+    }
+
     if (distance > 5 && !this.stateUntil) {
       const pace = 2.6 + this.energy * 2.2;
       this.x += (dx / distance) * pace;
@@ -343,7 +425,7 @@ class XixiDog {
     this.drawToys();
     const anim = this.animations[this.state] || this.animations.idle;
     const frame = Math.floor((time / 1000) * anim.fps) % anim.frames;
-    const sx = frame * this.frameWidth;
+    const sx = ((anim.frameStart || 0) + frame) * this.frameWidth;
     const sy = anim.row * this.frameHeight;
     const scale = Math.min(canvas.width / 820, canvas.height / 520) * 1.06;
     const drawW = this.frameWidth * scale;
@@ -374,12 +456,12 @@ class XixiDog {
       if (toy.type === "ball") {
         ctx.fillStyle = "#e9574e";
         ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, TAU);
+        ctx.arc(0, 0, 38, 0, TAU);
         ctx.fill();
         ctx.strokeStyle = "#fff3df";
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 9;
         ctx.beginPath();
-        ctx.arc(0, 0, 11, -0.9, 1.45);
+        ctx.arc(0, 0, 25, -0.9, 1.45);
         ctx.stroke();
       } else {
         ctx.fillStyle = "#d69449";
@@ -427,6 +509,7 @@ class Game {
     window.addEventListener("resize", () => this.resize());
     canvas.addEventListener("click", (event) => {
       const p = this.canvasPoint(event);
+      this.xixi.wake();
       this.xixi.targetX = clamp(p.x, this.bounds.left, this.bounds.right);
       this.xixi.targetY = clamp(p.y, this.bounds.top, this.bounds.bottom);
       this.xixi.say("熙熙狗跑向你点的地方");
@@ -435,6 +518,7 @@ class Game {
     document.querySelector("#ballBtn").addEventListener("click", () => this.xixi.playBall(this.bounds));
     document.querySelector("#waveBtn").addEventListener("click", () => this.xixi.wave());
     document.querySelector("#restBtn").addEventListener("click", () => this.xixi.rest());
+    document.querySelector("#sleepBtn").addEventListener("click", () => this.xixi.sleepAt(this.scene.bed));
     document.querySelectorAll("[data-scene]").forEach((button) => {
       button.addEventListener("click", () => {
         document.querySelectorAll("[data-scene]").forEach((tab) => tab.classList.remove("active"));
