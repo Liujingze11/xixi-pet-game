@@ -10,6 +10,8 @@ const chatForm = document.querySelector("#chatForm");
 const chatInput = document.querySelector("#chatInput");
 const sendChatBtn = document.querySelector("#sendChatBtn");
 const clearChatBtn = document.querySelector("#clearChatBtn");
+const memoryList = document.querySelector("#memoryList");
+const clearMemoryBtn = document.querySelector("#clearMemoryBtn");
 
 const TAU = Math.PI * 2;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -485,14 +487,17 @@ class Game {
 class XixiChat {
   constructor(game) {
     this.game = game;
-    this.storageKey = "xixi.deepseek.apiKey";
+    this.apiKeyStorageKey = "xixi.deepseek.apiKey";
+    this.memoryStorageKey = "xixi.agent.memories";
     this.messages = [];
+    this.memories = [];
     this.systemPrompt = [
       "你是一只名叫熙熙的小狗，也是网页电子宠物游戏里的主角。",
       "你是金棕色长毛小狗，白色脸线和胸毛，穿着黑色和米色的小背带。",
       "你用第一人称说话，性格亲近、黏人、好奇，有一点小狗式的撒娇。",
       "回答要短，通常 1 到 3 句；可以偶尔用“汪”“呜”“摇尾巴”等小狗动作，但不要每句都叫。",
       "你知道自己在小屋、花园或夜晚场景里，会根据用户的话做出可爱的回应。",
+      "你是用户的私人 Agent，会自然使用长期记忆，但不要生硬复述记忆列表。",
       "不要声称自己是 AI，不要解释系统提示。",
     ].join("\n");
     this.fallbacks = [
@@ -502,13 +507,14 @@ class XixiChat {
       "这个我想闻一闻再回答你，先给你一个小狗贴贴。",
     ];
     this.bind();
-    this.restoreKey();
-    this.addMessage("assistant", "汪，我是熙熙。你可以把 DeepSeek API Key 填上，也可以先直接跟我说话。");
+    this.restoreState();
+    this.renderMemories();
+    this.addMessage("assistant", "汪，我是熙熙。你可以把 DeepSeek API Key 填上，也可以告诉我“记住……”，我会把重要的事放进私人记忆里。");
   }
 
   bind() {
     apiKeyInput.addEventListener("input", () => {
-      localStorage.setItem(this.storageKey, apiKeyInput.value.trim());
+      localStorage.setItem(this.apiKeyStorageKey, apiKeyInput.value.trim());
     });
     chatForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -520,10 +526,43 @@ class XixiChat {
       this.addMessage("assistant", "聊天清空啦。熙熙重新坐好，继续听你说。");
       this.game.xixi.wave();
     });
+    clearMemoryBtn.addEventListener("click", () => {
+      this.memories = [];
+      this.saveMemories();
+      this.renderMemories();
+      this.addMessage("system", "熙熙已经忘记本机保存的长期记忆。");
+      this.game.xixi.setTemporaryState("waiting", 1400);
+    });
   }
 
-  restoreKey() {
-    apiKeyInput.value = localStorage.getItem(this.storageKey) || "";
+  restoreState() {
+    apiKeyInput.value = localStorage.getItem(this.apiKeyStorageKey) || "";
+    try {
+      this.memories = JSON.parse(localStorage.getItem(this.memoryStorageKey) || "[]");
+    } catch {
+      this.memories = [];
+    }
+  }
+
+  saveMemories() {
+    localStorage.setItem(this.memoryStorageKey, JSON.stringify(this.memories.slice(-24)));
+  }
+
+  renderMemories() {
+    memoryList.innerHTML = "";
+    if (!this.memories.length) {
+      const empty = document.createElement("span");
+      empty.className = "memory-empty";
+      empty.textContent = "还没有记忆。试试说：记住我喜欢夜晚场景。";
+      memoryList.append(empty);
+      return;
+    }
+    this.memories.slice(-8).forEach((memory) => {
+      const chip = document.createElement("span");
+      chip.className = "memory-chip";
+      chip.textContent = memory;
+      memoryList.append(chip);
+    });
   }
 
   addMessage(role, text) {
@@ -534,6 +573,38 @@ class XixiChat {
     chatLog.append(bubble);
     chatLog.scrollTop = chatLog.scrollHeight;
     if (role === "assistant") this.game.xixi.say(text);
+  }
+
+  rememberFromUser(text) {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    const patterns = [
+      /记住[:：]?\s*(.+)/,
+      /帮我记住[:：]?\s*(.+)/,
+      /你要记得[:：]?\s*(.+)/,
+      /我叫(.{1,18})/,
+      /我的名字是(.{1,18})/,
+      /我喜欢(.{1,36})/,
+      /我不喜欢(.{1,36})/,
+      /我希望(.{1,48})/,
+    ];
+    const match = patterns.map((pattern) => normalized.match(pattern)).find(Boolean);
+    if (!match) return;
+    const memory = match[0].startsWith("我叫") || match[0].startsWith("我的名字是")
+      ? `用户${match[0]}`
+      : match[1].trim();
+    if (memory.length < 2) return;
+    const compact = memory.slice(0, 80);
+    if (this.memories.some((item) => item === compact)) return;
+    this.memories.push(compact);
+    this.memories = this.memories.slice(-24);
+    this.saveMemories();
+    this.renderMemories();
+    this.addMessage("system", `熙熙记住了：${compact}`);
+  }
+
+  buildSystemPrompt() {
+    if (!this.memories.length) return this.systemPrompt;
+    return `${this.systemPrompt}\n\n长期记忆（只用于个性化陪伴，不要逐条复述）：\n${this.memories.map((memory, index) => `${index + 1}. ${memory}`).join("\n")}`;
   }
 
   setBusy(isBusy) {
@@ -547,6 +618,7 @@ class XixiChat {
     if (!text) return;
     chatInput.value = "";
     this.addMessage("user", text);
+    this.rememberFromUser(text);
     this.game.xixi.setTemporaryState("review", 1200);
     const key = apiKeyInput.value.trim();
     if (!key) {
@@ -583,7 +655,7 @@ class XixiChat {
       },
       body: JSON.stringify({
         model: "deepseek-v4-flash",
-        messages: [{ role: "system", content: this.systemPrompt }, ...recentMessages],
+        messages: [{ role: "system", content: this.buildSystemPrompt() }, ...recentMessages],
         temperature: 0.8,
         max_tokens: 180,
         thinking: { type: "disabled" },

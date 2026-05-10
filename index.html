@@ -64,11 +64,18 @@
             <input id="chatInput" type="text" autocomplete="off" placeholder="跟熙熙说句话" />
             <button id="sendChatBtn" type="submit">发送</button>
           </form>
+          <div class="memory-box" aria-label="熙熙的长期记忆">
+            <div class="memory-head">
+              <strong>私人记忆</strong>
+              <button id="clearMemoryBtn" type="button">忘记</button>
+            </div>
+            <div id="memoryList" class="memory-list"></div>
+          </div>
         </section>
 
         <div class="asset-note">
-          <strong>形象来源</strong>
-          <span>聊天不会把 Key 写进仓库，只保存在当前浏览器。</span>
+          <strong>私人 Agent</strong>
+          <span>API Key 和长期记忆只保存在当前浏览器，不写进仓库。</span>
         </div>
       </aside>
     </main>
