@@ -4,7 +4,7 @@ const happyValue = document.querySelector("#happyValue");
 const energyValue = document.querySelector("#energyValue");
 const bondValue = document.querySelector("#bondValue");
 const speech = document.querySelector("#speech");
-const apiKeyInput = document.querySelector("#apiKeyInput");
+const accessCodeInput = document.querySelector("#accessCodeInput");
 const chatLog = document.querySelector("#chatLog");
 const chatForm = document.querySelector("#chatForm");
 const chatInput = document.querySelector("#chatInput");
@@ -487,10 +487,14 @@ class Game {
 class XixiChat {
   constructor(game) {
     this.game = game;
-    this.apiKeyStorageKey = "xixi.deepseek.apiKey";
-    this.memoryStorageKey = "xixi.agent.memories";
+    this.accessCodeStorageKey = "xixi.agent.accessCode";
+    this.userIdStorageKey = "xixi.agent.userId";
+    this.conversationStorageKey = "xixi.agent.conversationId";
+    this.cachedMemoryStorageKey = "xixi.agent.cachedMemories";
     this.messages = [];
     this.memories = [];
+    this.userId = "";
+    this.conversationId = "";
     this.systemPrompt = [
       "你是一只名叫熙熙的小狗，也是网页电子宠物游戏里的主角。",
       "你是金棕色长毛小狗，白色脸线和胸毛，穿着黑色和米色的小背带。",
@@ -509,12 +513,13 @@ class XixiChat {
     this.bind();
     this.restoreState();
     this.renderMemories();
-    this.addMessage("assistant", "汪，我是熙熙。你可以把 DeepSeek API Key 填上，也可以告诉我“记住……”，我会把重要的事放进私人记忆里。");
+    this.addMessage("assistant", "汪，我是熙熙。云端部署后，我会把重要的聊天变成向量记忆；你也可以先直接和我说话。");
+    this.loadCloudMemories();
   }
 
   bind() {
-    apiKeyInput.addEventListener("input", () => {
-      localStorage.setItem(this.apiKeyStorageKey, apiKeyInput.value.trim());
+    accessCodeInput.addEventListener("input", () => {
+      localStorage.setItem(this.accessCodeStorageKey, accessCodeInput.value.trim());
     });
     chatForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -527,25 +532,31 @@ class XixiChat {
       this.game.xixi.wave();
     });
     clearMemoryBtn.addEventListener("click", () => {
-      this.memories = [];
-      this.saveMemories();
-      this.renderMemories();
-      this.addMessage("system", "熙熙已经忘记本机保存的长期记忆。");
-      this.game.xixi.setTemporaryState("waiting", 1400);
+      this.clearCloudMemories();
     });
   }
 
   restoreState() {
-    apiKeyInput.value = localStorage.getItem(this.apiKeyStorageKey) || "";
+    accessCodeInput.value = localStorage.getItem(this.accessCodeStorageKey) || "";
+    this.userId = localStorage.getItem(this.userIdStorageKey);
+    if (!this.userId) {
+      this.userId = crypto.randomUUID();
+      localStorage.setItem(this.userIdStorageKey, this.userId);
+    }
+    this.conversationId = localStorage.getItem(this.conversationStorageKey) || "";
     try {
-      this.memories = JSON.parse(localStorage.getItem(this.memoryStorageKey) || "[]");
+      this.memories = JSON.parse(localStorage.getItem(this.cachedMemoryStorageKey) || "[]");
     } catch {
       this.memories = [];
     }
   }
 
   saveMemories() {
-    localStorage.setItem(this.memoryStorageKey, JSON.stringify(this.memories.slice(-24)));
+    localStorage.setItem(this.cachedMemoryStorageKey, JSON.stringify(this.memories.slice(0, 24)));
+  }
+
+  memoryText(memory) {
+    return typeof memory === "string" ? memory : memory.content;
   }
 
   renderMemories() {
@@ -558,9 +569,11 @@ class XixiChat {
       return;
     }
     this.memories.slice(-8).forEach((memory) => {
+      const text = this.memoryText(memory);
+      if (!text) return;
       const chip = document.createElement("span");
       chip.className = "memory-chip";
-      chip.textContent = memory;
+      chip.textContent = text;
       memoryList.append(chip);
     });
   }
@@ -594,7 +607,7 @@ class XixiChat {
       : match[1].trim();
     if (memory.length < 2) return;
     const compact = memory.slice(0, 80);
-    if (this.memories.some((item) => item === compact)) return;
+    if (this.memories.some((item) => this.memoryText(item) === compact)) return;
     this.memories.push(compact);
     this.memories = this.memories.slice(-24);
     this.saveMemories();
@@ -604,7 +617,9 @@ class XixiChat {
 
   buildSystemPrompt() {
     if (!this.memories.length) return this.systemPrompt;
-    return `${this.systemPrompt}\n\n长期记忆（只用于个性化陪伴，不要逐条复述）：\n${this.memories.map((memory, index) => `${index + 1}. ${memory}`).join("\n")}`;
+    return `${this.systemPrompt}\n\n长期记忆（只用于个性化陪伴，不要逐条复述）：\n${this.memories
+      .map((memory, index) => `${index + 1}. ${this.memoryText(memory)}`)
+      .join("\n")}`;
   }
 
   setBusy(isBusy) {
@@ -618,23 +633,27 @@ class XixiChat {
     if (!text) return;
     chatInput.value = "";
     this.addMessage("user", text);
-    this.rememberFromUser(text);
     this.game.xixi.setTemporaryState("review", 1200);
-    const key = apiKeyInput.value.trim();
-    if (!key) {
-      this.localReply(text);
-      return;
-    }
 
     this.setBusy(true);
     try {
-      const reply = await this.askDeepSeek(key);
-      this.addMessage("assistant", reply);
+      const result = await this.askCloudAgent(text);
+      this.addMessage("assistant", result.reply);
+      if (result.conversationId) {
+        this.conversationId = result.conversationId;
+        localStorage.setItem(this.conversationStorageKey, result.conversationId);
+      }
+      if (Array.isArray(result.memories)) {
+        this.memories = result.memories;
+        this.saveMemories();
+        this.renderMemories();
+      }
       this.game.xixi.happy = clamp(this.game.xixi.happy + 0.014, 0, 1);
       this.game.xixi.bond = clamp(this.game.xixi.bond + 0.018, 0, 1);
       this.game.xixi.setTemporaryState("waving", 1400);
     } catch (error) {
-      this.addMessage("system", "DeepSeek 连接失败，先切回本地熙熙回复。");
+      this.addMessage("system", "云端 Agent 暂时不可用，先切回本地熙熙回复。");
+      this.rememberFromUser(text);
       this.localReply(text);
       console.error(error);
     } finally {
@@ -643,32 +662,63 @@ class XixiChat {
     }
   }
 
-  async askDeepSeek(key) {
-    const recentMessages = this.messages
-      .filter((message) => message.role === "user" || message.role === "assistant")
-      .slice(-10);
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
+  async askCloudAgent(text) {
+    const response = await fetch("/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
+        "X-Xixi-Access-Code": accessCodeInput.value.trim(),
       },
       body: JSON.stringify({
-        model: "deepseek-v4-flash",
-        messages: [{ role: "system", content: this.buildSystemPrompt() }, ...recentMessages],
-        temperature: 0.8,
-        max_tokens: 180,
-        thinking: { type: "disabled" },
+        userId: this.userId,
+        conversationId: this.conversationId,
+        message: text,
+        history: this.messages
+          .filter((message) => message.role === "user" || message.role === "assistant")
+          .slice(-8),
       }),
     });
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`DeepSeek ${response.status}: ${detail}`);
+      throw new Error(`Xixi agent ${response.status}: ${detail}`);
     }
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content?.trim();
-    if (!reply) throw new Error("DeepSeek returned an empty message");
-    return reply;
+    return response.json();
+  }
+
+  async loadCloudMemories() {
+    try {
+      const url = `/api/memories?userId=${encodeURIComponent(this.userId)}`;
+      const response = await fetch(url, {
+        headers: { "X-Xixi-Access-Code": accessCodeInput.value.trim() },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      this.memories = data.memories || [];
+      this.saveMemories();
+      this.renderMemories();
+    } catch {
+      // Static previews do not have serverless routes; cached local memories remain visible.
+    }
+  }
+
+  async clearCloudMemories() {
+    try {
+      await fetch("/api/memories", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Xixi-Access-Code": accessCodeInput.value.trim(),
+        },
+        body: JSON.stringify({ userId: this.userId }),
+      });
+    } catch {
+      // Clearing local cache is still useful when the backend is not available.
+    }
+    this.memories = [];
+    this.saveMemories();
+    this.renderMemories();
+    this.addMessage("system", "熙熙已经忘记保存的长期记忆。");
+    this.game.xixi.setTemporaryState("waiting", 1400);
   }
 
   localReply(text) {

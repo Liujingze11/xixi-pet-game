@@ -1,0 +1,15 @@
+{
+  "name": "xixi-pet-game",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "check": "node --check game.js && node --check api/chat.js && node --check api/memories.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "vercel": "^44.7.3"
+  }
+}

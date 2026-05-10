@@ -56,8 +56,8 @@
             <button id="clearChatBtn" type="button" aria-label="清空聊天">清空</button>
           </div>
           <label class="api-key">
-            <span>API Key</span>
-            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="sk-..." />
+            <span>私人访问码</span>
+            <input id="accessCodeInput" type="password" autocomplete="off" placeholder="云端部署后填写" />
           </label>
           <div id="chatLog" class="chat-log" aria-live="polite"></div>
           <form id="chatForm" class="chat-form">
@@ -75,7 +75,7 @@
 
         <div class="asset-note">
           <strong>私人 Agent</strong>
-          <span>API Key 和长期记忆只保存在当前浏览器，不写进仓库。</span>
+          <span>云端版会把聊天和向量记忆保存到 Supabase。</span>
         </div>
       </aside>
     </main>
