@@ -4,7 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>熙熙狗的小屋</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preload" href="./assets/xixi-idle.webp?v=20260511-mobile" as="image" type="image/webp" fetchpriority="high" />
+    <link rel="preload" href="./assets/xixi-spritesheet.webp?v=20260511-mobile" as="image" type="image/webp" />
+    <link rel="stylesheet" href="./styles.css?v=20260511-mobile" />
   </head>
   <body>
     <main class="app">
@@ -26,7 +28,10 @@
 
       <aside class="panel" aria-label="控制面板">
         <div class="profile">
-          <img src="./assets/xixi-idle.png" alt="熙熙狗参考形象" />
+          <picture>
+            <source srcset="./assets/xixi-idle.webp?v=20260511-mobile" type="image/webp" />
+            <img src="./assets/xixi-idle.png" alt="熙熙狗参考形象" loading="eager" decoding="async" fetchpriority="high" />
+          </picture>
           <div>
             <p>当前主角</p>
             <h2>熙熙狗</h2>
@@ -76,6 +81,6 @@
       </aside>
     </main>
 
-    <script src="./game.js"></script>
+    <script src="./game.js?v=20260511-mobile"></script>
   </body>
 </html>

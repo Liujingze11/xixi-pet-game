@@ -1,5 +1,5 @@
 const canvas = document.querySelector("#game");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { alpha: false });
 const happyValue = document.querySelector("#happyValue");
 const energyValue = document.querySelector("#energyValue");
 const bondValue = document.querySelector("#bondValue");
@@ -14,8 +14,10 @@ const memoryList = document.querySelector("#memoryList");
 const clearMemoryBtn = document.querySelector("#clearMemoryBtn");
 
 const TAU = Math.PI * 2;
+const ASSET_VERSION = "20260511-mobile";
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const rand = (min, max) => min + Math.random() * (max - min);
+const versioned = (path) => `${path}?v=${ASSET_VERSION}`;
 
 class Scene {
   constructor() {
@@ -281,10 +283,9 @@ class Scene {
 
 class XixiDog {
   constructor() {
-    this.sheet = new Image();
-    this.sheet.src = "./assets/xixi-spritesheet.png";
-    this.sleepImage = new Image();
-    this.sleepImage.src = "./assets/xixi-sleep.png";
+    this.idleImage = this.loadImage("./assets/xixi-idle.webp", "./assets/xixi-idle.png");
+    this.sheet = this.loadImage("./assets/xixi-spritesheet.webp", "./assets/xixi-spritesheet.png");
+    this.sleepImage = this.loadImage("./assets/xixi-sleep.webp", "./assets/xixi-sleep.png");
     this.frameWidth = 192;
     this.frameHeight = 208;
     this.x = 640;
@@ -312,6 +313,23 @@ class XixiDog {
       running: { row: 7, frames: 6, fps: 5.5 },
       review: { row: 8, frames: 6, fps: 3.3 },
     };
+  }
+
+  loadImage(primary, fallback) {
+    const image = new Image();
+    image.decoding = "async";
+    image.onerror = () => {
+      if (fallback && !image.dataset.fallbackLoaded) {
+        image.dataset.fallbackLoaded = "true";
+        image.src = versioned(fallback);
+      }
+    };
+    image.src = versioned(primary);
+    return image;
+  }
+
+  hasLoaded(image) {
+    return image.complete && image.naturalWidth > 0;
   }
 
   say(text) {
@@ -428,6 +446,10 @@ class XixiDog {
       this.drawSleeping(time);
       return;
     }
+    if (!this.hasLoaded(this.sheet)) {
+      this.drawIdleFallback(time);
+      return;
+    }
     const anim = this.animations[this.state] || this.animations.idle;
     const frame = Math.floor((time / 1000) * anim.fps) % anim.frames;
     const sx = ((anim.frameStart || 0) + frame) * this.frameWidth;
@@ -471,8 +493,35 @@ class XixiDog {
     ctx.save();
     ctx.translate(this.x, this.y + bob);
     ctx.scale(breath, 1);
-    ctx.drawImage(this.sleepImage, -drawW / 2, -drawH * 0.72, drawW, drawH);
+    const image = this.hasLoaded(this.sleepImage) ? this.sleepImage : this.idleImage;
+    if (this.hasLoaded(image)) {
+      ctx.drawImage(image, -drawW / 2, -drawH * 0.72, drawW, drawH);
+    }
     ctx.restore();
+
+    this.nameplate(drawW, drawH);
+  }
+
+  drawIdleFallback(time) {
+    const scale = Math.min(canvas.width / 820, canvas.height / 520) * 1.06;
+    const drawW = this.frameWidth * scale;
+    const drawH = this.frameHeight * scale;
+    const bob = Math.sin(time * 0.004) * 2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#17211d";
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y + drawH * 0.33, drawW * 0.35, drawH * 0.08, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    if (this.hasLoaded(this.idleImage)) {
+      ctx.save();
+      ctx.translate(this.x, this.y + bob);
+      ctx.drawImage(this.idleImage, -drawW / 2, -drawH * 0.72, drawW, drawH);
+      ctx.restore();
+    }
 
     this.nameplate(drawW, drawH);
   }
@@ -529,6 +578,7 @@ class Game {
     this.scene = new Scene();
     this.xixi = new XixiDog();
     this.bounds = { left: 180, right: 1100, top: 410, bottom: 620 };
+    this.hasPlacedXixi = false;
     this.bind();
     this.resize();
     requestAnimationFrame((time) => this.loop(time));
@@ -560,9 +610,11 @@ class Game {
 
   resize() {
     const rect = canvas.getBoundingClientRect();
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.max(900, Math.floor(rect.width * ratio));
-    canvas.height = Math.max(620, Math.floor(rect.height * ratio));
+    const isMobile = window.matchMedia("(max-width: 900px)").matches;
+    const ratio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
+    canvas.width = Math.max(isMobile ? 360 : 900, Math.floor(rect.width * ratio));
+    canvas.height = Math.max(isMobile ? 360 : 620, Math.floor(rect.height * ratio));
+    ctx.imageSmoothingEnabled = false;
     this.scene.resize(canvas.width, canvas.height);
     this.bounds = {
       left: canvas.width * 0.18,
@@ -570,8 +622,18 @@ class Game {
       top: canvas.height * 0.58,
       bottom: canvas.height * 0.76,
     };
-    this.xixi.x = clamp(this.xixi.x, this.bounds.left, this.bounds.right);
-    this.xixi.y = clamp(this.xixi.y, this.bounds.top, this.bounds.bottom);
+    if (!this.hasPlacedXixi) {
+      this.xixi.x = (this.bounds.left + this.bounds.right) / 2;
+      this.xixi.y = this.bounds.bottom;
+      this.xixi.targetX = this.xixi.x;
+      this.xixi.targetY = this.xixi.y;
+      this.hasPlacedXixi = true;
+    } else {
+      this.xixi.x = clamp(this.xixi.x, this.bounds.left, this.bounds.right);
+      this.xixi.y = clamp(this.xixi.y, this.bounds.top, this.bounds.bottom);
+      this.xixi.targetX = clamp(this.xixi.targetX, this.bounds.left, this.bounds.right);
+      this.xixi.targetY = clamp(this.xixi.targetY, this.bounds.top, this.bounds.bottom);
+    }
   }
 
   canvasPoint(event) {
