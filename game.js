@@ -14,7 +14,7 @@ const memoryList = document.querySelector("#memoryList");
 const clearMemoryBtn = document.querySelector("#clearMemoryBtn");
 
 const TAU = Math.PI * 2;
-const ASSET_VERSION = "20260511-mobile";
+const ASSET_VERSION = "20260512-open-world";
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const rand = (min, max) => min + Math.random() * (max - min);
 const versioned = (path) => `${path}?v=${ASSET_VERSION}`;
@@ -22,10 +22,14 @@ const versioned = (path) => `${path}?v=${ASSET_VERSION}`;
 class Scene {
   constructor() {
     this.name = "room";
-    this.width = canvas.width;
-    this.height = canvas.height;
+    this.viewportWidth = canvas.width;
+    this.viewportHeight = canvas.height;
+    this.width = canvas.width * 2.4;
+    this.height = canvas.height * 1.7;
     this.bed = { x: 960, y: 540, width: 210, height: 96 };
     this.stars = Array.from({ length: 46 }, () => ({ x: Math.random(), y: Math.random(), r: rand(1, 2.8) }));
+    this.flowers = Array.from({ length: 95 }, (_, i) => ({ x: (i * 157) % 2600, y: 0.56 + ((i * 41) % 34) / 100, i }));
+    this.pebbles = Array.from({ length: 70 }, (_, i) => ({ x: (i * 211) % 2800, y: 0.58 + ((i * 37) % 30) / 100, r: 2 + (i % 4) }));
   }
 
   set(name) {
@@ -33,11 +37,13 @@ class Scene {
   }
 
   resize(width, height) {
-    this.width = width;
-    this.height = height;
+    this.viewportWidth = width;
+    this.viewportHeight = height;
+    this.width = Math.max(width * 2.35, 2200);
+    this.height = Math.max(height * 1.55, 960);
     this.bed = {
-      x: width * 0.78,
-      y: height * 0.68,
+      x: this.width * 0.86,
+      y: this.height * 0.68,
       width: clamp(width * 0.2, 170, 260),
       height: clamp(height * 0.12, 74, 116),
     };
@@ -47,6 +53,7 @@ class Scene {
     if (this.name === "garden") this.garden(time);
     else if (this.name === "night") this.night(time);
     else this.room(time);
+    this.worldDetails(time);
     this.dogBed(time);
     this.floorAir(time);
   }
@@ -67,10 +74,14 @@ class Scene {
     floor.addColorStop(1, "#a7c38c");
     ctx.fillStyle = floor;
     ctx.fillRect(0, floorTop, w, h - floorTop);
-    this.window(w * 0.72, h * 0.15, 205, 136);
-    this.sofa(w * 0.1, h * 0.32, w * 0.25, h * 0.18);
-    this.rug(w * 0.52, h * 0.72, w * 0.54, h * 0.22, "#e99263", "#f8d7a6");
-    this.plant(w * 0.07, h * 0.39);
+    this.window(w * 0.18, h * 0.13, 205, 136);
+    this.window(w * 0.66, h * 0.16, 220, 140);
+    this.sofa(w * 0.07, h * 0.32, this.viewportWidth * 0.25, this.viewportHeight * 0.18);
+    this.sofa(w * 0.56, h * 0.31, this.viewportWidth * 0.23, this.viewportHeight * 0.17);
+    this.rug(w * 0.31, h * 0.72, this.viewportWidth * 0.54, this.viewportHeight * 0.22, "#e99263", "#f8d7a6");
+    this.rug(w * 0.72, h * 0.73, this.viewportWidth * 0.48, this.viewportHeight * 0.2, "#d99a6a", "#f5d8a8");
+    this.plant(w * 0.34, h * 0.5);
+    this.plant(w * 0.62, h * 0.5);
   }
 
   garden(time) {
@@ -90,8 +101,10 @@ class Scene {
     for (let i = 0; i < 5; i++) this.cloud(((i * 260 + time * 0.015) % (w + 200)) - 100, 86 + i % 2 * 58, 0.9 + i % 2 * 0.25);
     ctx.fillStyle = "#75bd6d";
     ctx.fillRect(0, h * 0.48, w, h * 0.52);
-    this.rug(w * 0.52, h * 0.72, w * 0.56, h * 0.23, "#e9c85d", "#b7d98b");
-    for (let i = 0; i < 30; i++) this.flower((i * 91) % w, h * 0.54 + ((i * 47) % (h * 0.33)), i);
+    this.rug(w * 0.3, h * 0.72, this.viewportWidth * 0.56, this.viewportHeight * 0.23, "#e9c85d", "#b7d98b");
+    this.rug(w * 0.72, h * 0.71, this.viewportWidth * 0.46, this.viewportHeight * 0.19, "#d9e36f", "#91be73");
+    this.pond(w * 0.52, h * 0.64, this.viewportWidth * 0.34, this.viewportHeight * 0.16);
+    this.flowers.forEach((f) => this.flower(f.x % w, h * f.y, f.i));
   }
 
   night(time) {
@@ -121,9 +134,11 @@ class Scene {
     ctx.globalAlpha = 1;
     ctx.fillStyle = "#5b755e";
     ctx.fillRect(0, h * 0.48, w, h * 0.52);
-    this.rug(w * 0.5, h * 0.73, w * 0.52, h * 0.22, "#526f89", "#a8c7b0");
-    this.lantern(w * 0.15, h * 0.4, time);
-    this.lantern(w * 0.9, h * 0.42, time + 600);
+    this.rug(w * 0.31, h * 0.73, this.viewportWidth * 0.52, this.viewportHeight * 0.22, "#526f89", "#a8c7b0");
+    this.rug(w * 0.72, h * 0.72, this.viewportWidth * 0.45, this.viewportHeight * 0.2, "#4b657a", "#9ab8a7");
+    this.lantern(w * 0.12, h * 0.4, time);
+    this.lantern(w * 0.48, h * 0.42, time + 600);
+    this.lantern(w * 0.86, h * 0.4, time + 1100);
   }
 
   floorAir(time) {
@@ -132,13 +147,47 @@ class Scene {
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 2;
     for (let i = 0; i < 7; i++) {
-      const y = this.height * 0.54 + i * 38 + Math.sin(time * 0.001 + i) * 3;
+      const y = this.height * 0.54 + i * 46 + Math.sin(time * 0.001 + i) * 3;
       ctx.beginPath();
       ctx.moveTo(32, y);
       ctx.bezierCurveTo(this.width * 0.3, y - 22, this.width * 0.62, y + 25, this.width - 36, y - 3);
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  worldDetails(time) {
+    const floorTop = this.height * 0.5;
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.strokeStyle = "#fff8d5";
+    ctx.lineWidth = 4;
+    for (let i = 0; i < 4; i++) {
+      const y = floorTop + 86 + i * 92;
+      ctx.beginPath();
+      ctx.moveTo(80, y);
+      ctx.bezierCurveTo(this.width * 0.28, y + 42, this.width * 0.52, y - 50, this.width - 90, y + 18);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = this.name === "night" ? "rgba(238, 231, 178, 0.28)" : "rgba(96, 112, 88, 0.24)";
+    this.pebbles.forEach((p) => {
+      ctx.beginPath();
+      ctx.ellipse(p.x % this.width, this.height * p.y, p.r * 1.5, p.r, Math.sin(p.x) * 0.6, 0, TAU);
+      ctx.fill();
+    });
+    ctx.restore();
+
+    if (this.name !== "room") {
+      this.tree(this.width * 0.22, this.height * 0.51, 1.08);
+      this.tree(this.width * 0.78, this.height * 0.52, 0.95);
+    }
+    if (this.name === "room") {
+      this.lowTable(this.width * 0.44, this.height * 0.61);
+      this.lowTable(this.width * 0.82, this.height * 0.62);
+    }
   }
 
   rug(x, y, w, h, a, b) {
@@ -228,6 +277,55 @@ class Scene {
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, TAU);
     ctx.fill();
+  }
+
+  pond(x, y, w, h) {
+    ctx.save();
+    ctx.fillStyle = "rgba(84, 173, 188, 0.72)";
+    ctx.beginPath();
+    ctx.ellipse(x, y, w / 2, h / 2, -0.08, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.42)";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.ellipse(x, y, w / 2 - 12, h / 2 - 10, -0.08, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  tree(x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = "#9f6d43";
+    ctx.beginPath();
+    ctx.roundRect(-22, 45, 44, 96, 14);
+    ctx.fill();
+    ctx.fillStyle = "#4caa68";
+    for (let i = 0; i < 7; i++) {
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(i) * 28, Math.sin(i * 1.7) * 14, 58, 42, i * 0.28, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  lowTable(x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = "rgba(60, 44, 32, 0.18)";
+    ctx.beginPath();
+    ctx.ellipse(0, 42, 90, 18, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#bf7855";
+    ctx.beginPath();
+    ctx.roundRect(-74, -18, 148, 44, 16);
+    ctx.fill();
+    ctx.fillStyle = "#f7d18b";
+    ctx.beginPath();
+    ctx.arc(28, 2, 17, 0, TAU);
+    ctx.fill();
+    ctx.restore();
   }
 
   lantern(x, y, time) {
@@ -578,6 +676,7 @@ class Game {
     this.scene = new Scene();
     this.xixi = new XixiDog();
     this.bounds = { left: 180, right: 1100, top: 410, bottom: 620 };
+    this.camera = { x: 0, y: 0 };
     this.hasPlacedXixi = false;
     this.bind();
     this.resize();
@@ -591,7 +690,7 @@ class Game {
       this.xixi.wake();
       this.xixi.targetX = clamp(p.x, this.bounds.left, this.bounds.right);
       this.xixi.targetY = clamp(p.y, this.bounds.top, this.bounds.bottom);
-      this.xixi.say("熙熙狗跑向你点的地方");
+      this.xixi.say("熙熙狗朝远处跑过去");
     });
     document.querySelector("#treatBtn").addEventListener("click", () => this.xixi.feed());
     document.querySelector("#ballBtn").addEventListener("click", () => this.xixi.playBall(this.bounds));
@@ -603,6 +702,8 @@ class Game {
         document.querySelectorAll("[data-scene]").forEach((tab) => tab.classList.remove("active"));
         button.classList.add("active");
         this.scene.set(button.dataset.scene);
+        this.xixi.targetX = clamp(this.xixi.x, this.bounds.left, this.bounds.right);
+        this.xixi.targetY = clamp(this.xixi.y, this.bounds.top, this.bounds.bottom);
         this.xixi.say(`熙熙狗来到${button.textContent}`);
       });
     });
@@ -617,14 +718,14 @@ class Game {
     ctx.imageSmoothingEnabled = false;
     this.scene.resize(canvas.width, canvas.height);
     this.bounds = {
-      left: canvas.width * 0.18,
-      right: canvas.width * 0.82,
-      top: canvas.height * 0.58,
-      bottom: canvas.height * 0.76,
+      left: canvas.width * 0.12,
+      right: this.scene.width - canvas.width * 0.12,
+      top: this.scene.height * 0.54,
+      bottom: this.scene.height * 0.84,
     };
     if (!this.hasPlacedXixi) {
-      this.xixi.x = (this.bounds.left + this.bounds.right) / 2;
-      this.xixi.y = this.bounds.bottom;
+      this.xixi.x = canvas.width * 0.5;
+      this.xixi.y = this.bounds.bottom - canvas.height * 0.08;
       this.xixi.targetX = this.xixi.x;
       this.xixi.targetY = this.xixi.y;
       this.hasPlacedXixi = true;
@@ -634,20 +735,37 @@ class Game {
       this.xixi.targetX = clamp(this.xixi.targetX, this.bounds.left, this.bounds.right);
       this.xixi.targetY = clamp(this.xixi.targetY, this.bounds.top, this.bounds.bottom);
     }
+    this.snapCameraToXixi();
   }
 
   canvasPoint(event) {
     const rect = canvas.getBoundingClientRect();
     return {
-      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+      x: this.camera.x + ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: this.camera.y + ((event.clientY - rect.top) / rect.height) * canvas.height,
     };
+  }
+
+  snapCameraToXixi() {
+    this.camera.x = clamp(this.xixi.x - canvas.width * 0.48, 0, Math.max(0, this.scene.width - canvas.width));
+    this.camera.y = clamp(this.xixi.y - canvas.height * 0.68, 0, Math.max(0, this.scene.height - canvas.height));
+  }
+
+  updateCamera() {
+    const targetX = clamp(this.xixi.x - canvas.width * 0.48, 0, Math.max(0, this.scene.width - canvas.width));
+    const targetY = clamp(this.xixi.y - canvas.height * 0.68, 0, Math.max(0, this.scene.height - canvas.height));
+    this.camera.x += (targetX - this.camera.x) * 0.08;
+    this.camera.y += (targetY - this.camera.y) * 0.08;
   }
 
   loop(time) {
     this.xixi.update(this.bounds);
+    this.updateCamera();
+    ctx.save();
+    ctx.translate(-this.camera.x, -this.camera.y);
     this.scene.draw(time);
     this.xixi.draw(time);
+    ctx.restore();
     this.updateHud();
     requestAnimationFrame((next) => this.loop(next));
   }
