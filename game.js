@@ -283,6 +283,8 @@ class XixiDog {
   constructor() {
     this.sheet = new Image();
     this.sheet.src = "./assets/xixi-spritesheet.png";
+    this.sleepImage = new Image();
+    this.sleepImage.src = "./assets/xixi-sleep.png";
     this.frameWidth = 192;
     this.frameHeight = 208;
     this.x = 640;
@@ -306,7 +308,6 @@ class XixiDog {
       jumping: { row: 4, frames: 5, fps: 7 },
       failed: { row: 5, frames: 8, fps: 4.5 },
       lying: { row: 5, frameStart: 2, frames: 3, fps: 1.8 },
-      sleeping: { row: 5, frameStart: 3, frames: 2, fps: 0.9 },
       waiting: { row: 6, frames: 6, fps: 3.1 },
       running: { row: 7, frames: 6, fps: 5.5 },
       review: { row: 8, frames: 6, fps: 3.3 },
@@ -423,6 +424,10 @@ class XixiDog {
 
   draw(time) {
     this.drawToys();
+    if (this.state === "sleeping") {
+      this.drawSleeping(time);
+      return;
+    }
     const anim = this.animations[this.state] || this.animations.idle;
     const frame = Math.floor((time / 1000) * anim.fps) % anim.frames;
     const sx = ((anim.frameStart || 0) + frame) * this.frameWidth;
@@ -443,6 +448,30 @@ class XixiDog {
     ctx.save();
     ctx.translate(this.x, this.y + bob);
     ctx.drawImage(this.sheet, sx, sy, this.frameWidth, this.frameHeight, -drawW / 2, -drawH * 0.72, drawW, drawH);
+    ctx.restore();
+
+    this.nameplate(drawW, drawH);
+  }
+
+  drawSleeping(time) {
+    const scale = Math.min(canvas.width / 820, canvas.height / 520) * 1.06;
+    const drawW = this.frameWidth * scale;
+    const drawH = this.frameHeight * scale;
+    const breath = 1 + Math.sin(time * 0.003) * 0.018;
+    const bob = Math.sin(time * 0.003) * 1.2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = "#17211d";
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y + drawH * 0.29, drawW * 0.36, drawH * 0.075, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(this.x, this.y + bob);
+    ctx.scale(breath, 1);
+    ctx.drawImage(this.sleepImage, -drawW / 2, -drawH * 0.72, drawW, drawH);
     ctx.restore();
 
     this.nameplate(drawW, drawH);
