@@ -14,7 +14,7 @@ const memoryList = document.querySelector("#memoryList");
 const clearMemoryBtn = document.querySelector("#clearMemoryBtn");
 
 const TAU = Math.PI * 2;
-const ASSET_VERSION = "20260512-open-world";
+const ASSET_VERSION = "20260512-qian-meihan";
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const rand = (min, max) => min + Math.random() * (max - min);
 const versioned = (path) => `${path}?v=${ASSET_VERSION}`;
@@ -671,10 +671,95 @@ class XixiDog {
   }
 }
 
+class QianMeihanNpc {
+  constructor() {
+    this.image = this.loadImage("./assets/qian-meihan.webp", "./assets/qian-meihan.png");
+    this.x = 760;
+    this.y = 710;
+    this.width = 1024;
+    this.height = 1536;
+  }
+
+  loadImage(primary, fallback) {
+    const image = new Image();
+    image.decoding = "async";
+    image.onerror = () => {
+      if (fallback && !image.dataset.fallbackLoaded) {
+        image.dataset.fallbackLoaded = "true";
+        image.src = versioned(fallback);
+      }
+    };
+    image.src = versioned(primary);
+    return image;
+  }
+
+  hasLoaded() {
+    return this.image.complete && this.image.naturalWidth > 0;
+  }
+
+  place(bounds, canvasWidth, canvasHeight) {
+    this.x = clamp(canvasWidth * 0.64, bounds.left + 80, bounds.right - 80);
+    this.y = clamp(bounds.bottom - canvasHeight * 0.02, bounds.top + 120, bounds.bottom);
+  }
+
+  draw(time) {
+    const { drawW, drawH } = this.drawSize();
+    const bob = Math.sin(time * 0.0022) * 2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = "#17211d";
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y + 8, drawW * 0.34, drawH * 0.045, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    if (this.hasLoaded()) {
+      ctx.save();
+      ctx.translate(this.x, this.y + bob);
+      ctx.drawImage(this.image, -drawW / 2, -drawH, drawW, drawH);
+      ctx.restore();
+    }
+
+    this.nameplate(drawW);
+  }
+
+  drawSize() {
+    const drawH = clamp(canvas.height * 0.34, 220, 330);
+    return { drawH, drawW: drawH * (this.width / this.height) };
+  }
+
+  contains(x, y) {
+    const { drawW, drawH } = this.drawSize();
+    return x >= this.x - drawW / 2 && x <= this.x + drawW / 2 && y >= this.y - drawH && y <= this.y + 54;
+  }
+
+  nameplate(drawW) {
+    ctx.save();
+    ctx.font = "16px ui-sans-serif, system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255, 248, 236, .94)";
+    ctx.strokeStyle = "rgba(68, 55, 42, .14)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(this.x - 58, this.y + 12, 116, 31, 15);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#2f7f75";
+    ctx.fillText("钱美含", this.x, this.y + 28);
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillStyle = "#96512f";
+    ctx.fillText("熙熙狗妈妈", this.x, this.y + 48);
+    ctx.restore();
+  }
+}
+
 class Game {
   constructor() {
     this.scene = new Scene();
     this.xixi = new XixiDog();
+    this.qianMeihan = new QianMeihanNpc();
     this.bounds = { left: 180, right: 1100, top: 410, bottom: 620 };
     this.camera = { x: 0, y: 0 };
     this.hasPlacedXixi = false;
@@ -688,6 +773,12 @@ class Game {
     canvas.addEventListener("click", (event) => {
       const p = this.canvasPoint(event);
       this.xixi.wake();
+      if (this.qianMeihan.contains(p.x, p.y)) {
+        this.xixi.targetX = clamp(this.qianMeihan.x - canvas.width * 0.16, this.bounds.left, this.bounds.right);
+        this.xixi.targetY = clamp(this.qianMeihan.y, this.bounds.top, this.bounds.bottom);
+        this.xixi.say("熙熙狗跑去找妈妈钱美含");
+        return;
+      }
       this.xixi.targetX = clamp(p.x, this.bounds.left, this.bounds.right);
       this.xixi.targetY = clamp(p.y, this.bounds.top, this.bounds.bottom);
       this.xixi.say("熙熙狗朝远处跑过去");
@@ -735,6 +826,7 @@ class Game {
       this.xixi.targetX = clamp(this.xixi.targetX, this.bounds.left, this.bounds.right);
       this.xixi.targetY = clamp(this.xixi.targetY, this.bounds.top, this.bounds.bottom);
     }
+    this.qianMeihan.place(this.bounds, canvas.width, canvas.height);
     this.snapCameraToXixi();
   }
 
@@ -764,7 +856,9 @@ class Game {
     ctx.save();
     ctx.translate(-this.camera.x, -this.camera.y);
     this.scene.draw(time);
-    this.xixi.draw(time);
+    [this.qianMeihan, this.xixi]
+      .sort((a, b) => a.y - b.y)
+      .forEach((entity) => entity.draw(time));
     ctx.restore();
     this.updateHud();
     requestAnimationFrame((next) => this.loop(next));
